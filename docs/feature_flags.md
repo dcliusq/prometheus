@@ -61,3 +61,11 @@ Exemplar storage is implemented as a fixed size circular buffer that stores exem
 This takes the snapshot of the chunks that are in memory along with the series information when shutting down and stores
 it on disk. This will reduce the startup time since the memory state can be restored with this snapshot and m-mapped 
 chunks without the need of WAL replay.
+
+## Scrape Timeout Metric
+
+`--enable-feature=scrape-timeout-metric`
+
+This adds an additional automatically generated metric for each scrape target called `scrape_timeout_seconds`.
+
+This allows you to measure each target to find out how close they are to timing out with `scrape_duration_seconds / scrape_timeout_seconds`.
