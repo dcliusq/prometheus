@@ -62,10 +62,10 @@ This takes the snapshot of the chunks that are in memory along with the series i
 it on disk. This will reduce the startup time since the memory state can be restored with this snapshot and m-mapped 
 chunks without the need of WAL replay.
 
-## Scrape Timeout Metric
+## Extra Scrape Metrics
 
-`--enable-feature=scrape-timeout-metric`
+`--enable-feature=extra-scrape-metrics`
 
-This adds an additional automatically generated metric for each scrape target called `scrape_timeout_seconds`.
+This adds additional automatically generated metrics for each scrape target.
 
-This allows you to measure each target to find out how close they are to timing out with `scrape_duration_seconds / scrape_timeout_seconds`.
+* `scrape_timeout_seconds`. The configured `scrape_timeout` for a target. This allows you to measure each target to find out how close they are to timing out with `scrape_duration_seconds / scrape_timeout_seconds`.
