@@ -36,7 +36,7 @@ import (
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/route"
+	"github.com/prometheus/prometheus/web/route"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/config"

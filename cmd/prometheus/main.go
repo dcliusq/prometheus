@@ -315,6 +315,12 @@ func main() {
 	a.Flag("enable-feature", "Comma separated feature names to enable. Valid options: exemplar-storage, expand-external-labels, memory-snapshot-on-shutdown, promql-at-modifier, promql-negative-offset, remote-write-receiver. See https://prometheus.io/docs/prometheus/latest/feature_flags/ for more details.").
 		Default("").StringsVar(&cfg.featureList)
 
+	a.Flag("secret", "开启访问秘钥，为空则不启用，cookie.opss").
+		Default("").StringVar(&cfg.web.Secret)
+
+	a.Flag("cmdb-addr", "开启token校验，为空则不启用，cookie.opst").
+		Default("").StringVar(&cfg.web.Secret)
+
 	promlogflag.AddFlags(a, &cfg.promlogConfig)
 
 	_, err := a.Parse(os.Args[1:])

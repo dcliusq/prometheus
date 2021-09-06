@@ -16,6 +16,7 @@ package route
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -39,16 +40,33 @@ func WithParam(ctx context.Context, p, v string) context.Context {
 // Router wraps httprouter.Router and adds support for prefixed sub-routers,
 // per-request context injections and instrumentation.
 type Router struct {
-	rtr    *httprouter.Router
-	prefix string
-	instrh func(handlerName string, handler http.HandlerFunc) http.HandlerFunc
+	rtr      *httprouter.Router
+	prefix   string
+	instrh   func(handlerName string, handler http.HandlerFunc) http.HandlerFunc
+	secret   string
+	sOpen    bool
+	cmdbAddr string
+	tOpen    bool
 }
 
 // New returns a new Router.
-func New() *Router {
-	return &Router{
+func New(secret,cmdbAddr string) *Router {
+	secret = strings.TrimSpace(secret)
+	cmdbAddr = strings.TrimSpace(cmdbAddr)
+	cmdbAddr = strings.TrimRight(cmdbAddr, "/")
+	r := &Router{
 		rtr: httprouter.New(),
+		secret: secret,
+		cmdbAddr: cmdbAddr,
 	}
+	print("secret: " + secret + "\n")
+	if secret != "" {
+		r.sOpen = true
+	}
+	if cmdbAddr != "" {
+		r.tOpen = true
+	}
+	return r
 }
 
 // WithInstrumentation returns a router with instrumentation support.
@@ -118,6 +136,30 @@ func (r *Router) Redirect(w http.ResponseWriter, req *http.Request, path string,
 
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	pass := false
+	if r.sOpen {
+		s, err := req.Cookie("opss")
+		if err == nil && s.Value == r.secret {
+			pass = true
+		}
+	}
+
+	if !pass && r.tOpen {
+		t,err := req.Cookie("opst")
+		if err == nil {
+			// 校验token
+			if t.Value != "" {
+
+			}
+		}
+	}
+
+	if !pass && (r.sOpen || r.tOpen) {
+		w.WriteHeader(403)
+		w.Write([]byte("No Permission!"))
+		return
+	}
+
 	r.rtr.ServeHTTP(w, req)
 }
 
