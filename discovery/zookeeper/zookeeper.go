@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -248,8 +247,9 @@ const (
 )
 
 type serversetMember struct {
-	ServiceEndpoint     serversetEndpoint
-	AdditionalEndpoints map[string]serversetEndpoint
+	ServiceEndpoint     serversetEndpoint `json:"serviceEndpoint"`
+	// AdditionalEndpoints map[string]serversetEndpoint
+	ExtLabels 			map[string]string `json:"extLabels"`
 	Status              string `json:"status"`
 	Shard               int    `json:"shard"`
 }
@@ -274,17 +274,26 @@ func parseServersetMember(data []byte, path string) (model.LabelSet, error) {
 	labels[serversetEndpointLabelPrefix+"_host"] = model.LabelValue(member.ServiceEndpoint.Host)
 	labels[serversetEndpointLabelPrefix+"_port"] = model.LabelValue(fmt.Sprintf("%d", member.ServiceEndpoint.Port))
 
-	for name, endpoint := range member.AdditionalEndpoints {
+	//for name, endpoint := range member.AdditionalEndpoints {
+	//	cleanName := model.LabelName(strutil.SanitizeLabelName(name))
+	//	labels[serversetEndpointLabelPrefix+"_host_"+cleanName] = model.LabelValue(
+	//		endpoint.Host)
+	//	labels[serversetEndpointLabelPrefix+"_port_"+cleanName] = model.LabelValue(
+	//		fmt.Sprintf("%d", endpoint.Port))
+	//}
+	if len(member.ExtLabels) > 10 {
+		return nil, errors.Wrapf(nil, "error 过多的ExtLabels，最多支持10个")
+	}
+	for name, val := range member.ExtLabels {
+		if len(name) + len(val) > 1024 {
+			continue
+		}
 		cleanName := model.LabelName(strutil.SanitizeLabelName(name))
-		labels[serversetEndpointLabelPrefix+"_host_"+cleanName] = model.LabelValue(
-			endpoint.Host)
-		labels[serversetEndpointLabelPrefix+"_port_"+cleanName] = model.LabelValue(
-			fmt.Sprintf("%d", endpoint.Port))
-
+		labels[cleanName] = model.LabelValue(val)
 	}
 
-	labels[serversetStatusLabel] = model.LabelValue(member.Status)
-	labels[serversetShardLabel] = model.LabelValue(strconv.Itoa(member.Shard))
+	//labels[serversetStatusLabel] = model.LabelValue(member.Status)
+	//labels[serversetShardLabel] = model.LabelValue(strconv.Itoa(member.Shard))
 
 	return labels, nil
 }
