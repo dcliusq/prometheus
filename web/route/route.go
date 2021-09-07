@@ -15,6 +15,7 @@ package route
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"strings"
 
@@ -43,7 +44,8 @@ type Router struct {
 	rtr      *httprouter.Router
 	prefix   string
 	instrh   func(handlerName string, handler http.HandlerFunc) http.HandlerFunc
-	secret   string
+
+	basic    string
 	sOpen    bool
 	cmdbAddr string
 	tOpen    bool
@@ -56,10 +58,9 @@ func New(secret,cmdbAddr string) *Router {
 	cmdbAddr = strings.TrimRight(cmdbAddr, "/")
 	r := &Router{
 		rtr: httprouter.New(),
-		secret: secret,
+		basic: secret,
 		cmdbAddr: cmdbAddr,
 	}
-	print("secret: " + secret + "\n")
 	if secret != "" {
 		r.sOpen = true
 	}
@@ -77,12 +78,30 @@ func (r *Router) WithInstrumentation(instrh func(handlerName string, handler htt
 			return newInstrh(handlerName, r.instrh(handlerName, handler))
 		}
 	}
-	return &Router{rtr: r.rtr, prefix: r.prefix, instrh: instrh}
+	return &Router{
+		rtr: r.rtr,
+		prefix: r.prefix,
+		instrh: instrh,
+
+		sOpen: r.sOpen,
+		basic: r.basic,
+		tOpen: r.tOpen,
+		cmdbAddr: r.cmdbAddr,
+	}
 }
 
 // WithPrefix returns a router that prefixes all registered routes with prefix.
 func (r *Router) WithPrefix(prefix string) *Router {
-	return &Router{rtr: r.rtr, prefix: r.prefix + prefix, instrh: r.instrh}
+	return &Router{
+		rtr: r.rtr,
+		prefix: r.prefix + prefix,
+		instrh: r.instrh,
+
+		sOpen: r.sOpen,
+		basic: r.basic,
+		tOpen: r.tOpen,
+		cmdbAddr: r.cmdbAddr,
+	}
 }
 
 // handle turns a HandlerFunc into an httprouter.Handle.
@@ -138,8 +157,9 @@ func (r *Router) Redirect(w http.ResponseWriter, req *http.Request, path string,
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	pass := false
 	if r.sOpen {
-		s, err := req.Cookie("opss")
-		if err == nil && s.Value == r.secret {
+		s := req.Header.Get("Authorization")
+		pwd,err := base64.StdEncoding.DecodeString(strings.TrimLeft(s, "Basic "))
+		if err == nil && string(pwd) == r.basic {
 			pass = true
 		}
 	}
@@ -155,8 +175,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if !pass && (r.sOpen || r.tOpen) {
-		w.WriteHeader(403)
-		w.Write([]byte("No Permission!"))
+		w.Header().Add("WWW-Authenticate", "Basic realm=\"Log in with secret\"")
+		w.WriteHeader(401)
+		w.Write([]byte("请登录！"))
 		return
 	}
 
