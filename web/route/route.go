@@ -16,6 +16,7 @@ package route
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -45,27 +46,15 @@ type Router struct {
 	prefix   string
 	instrh   func(handlerName string, handler http.HandlerFunc) http.HandlerFunc
 
-	basic    string
-	sOpen    bool
-	cmdbAddr string
-	tOpen    bool
+	as       *AuthStore
 }
 
 // New returns a new Router.
-func New(secret,cmdbAddr string) *Router {
-	secret = strings.TrimSpace(secret)
-	cmdbAddr = strings.TrimSpace(cmdbAddr)
-	cmdbAddr = strings.TrimRight(cmdbAddr, "/")
+func New(basicAuthOrigin string) *Router {
+	as := NewAuthStore(basicAuthOrigin)
 	r := &Router{
 		rtr: httprouter.New(),
-		basic: secret,
-		cmdbAddr: cmdbAddr,
-	}
-	if secret != "" {
-		r.sOpen = true
-	}
-	if cmdbAddr != "" {
-		r.tOpen = true
+		as: as,
 	}
 	return r
 }
@@ -83,10 +72,7 @@ func (r *Router) WithInstrumentation(instrh func(handlerName string, handler htt
 		prefix: r.prefix,
 		instrh: instrh,
 
-		sOpen: r.sOpen,
-		basic: r.basic,
-		tOpen: r.tOpen,
-		cmdbAddr: r.cmdbAddr,
+		as: r.as,
 	}
 }
 
@@ -97,10 +83,7 @@ func (r *Router) WithPrefix(prefix string) *Router {
 		prefix: r.prefix + prefix,
 		instrh: r.instrh,
 
-		sOpen: r.sOpen,
-		basic: r.basic,
-		tOpen: r.tOpen,
-		cmdbAddr: r.cmdbAddr,
+		as: r.as,
 	}
 }
 
@@ -155,32 +138,9 @@ func (r *Router) Redirect(w http.ResponseWriter, req *http.Request, path string,
 
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	pass := false
-	if r.sOpen {
-		s := req.Header.Get("Authorization")
-		pwd,err := base64.StdEncoding.DecodeString(strings.TrimLeft(s, "Basic "))
-		if err == nil && string(pwd) == r.basic {
-			pass = true
-		}
-	}
-
-	if !pass && r.tOpen {
-		t,err := req.Cookie("opst")
-		if err == nil {
-			// 校验token
-			if t.Value != "" {
-
-			}
-		}
-	}
-
-	if !pass && (r.sOpen || r.tOpen) {
-		w.Header().Add("WWW-Authenticate", "Basic realm=\"Log in with secret\"")
-		w.WriteHeader(401)
-		w.Write([]byte("请登录！"))
+	if !r.as.CheckBasicAuthHttp(w,req) {
 		return
 	}
-
 	r.rtr.ServeHTTP(w, req)
 }
 
@@ -193,4 +153,52 @@ func FileServe(dir string) http.HandlerFunc {
 		r.URL.Path = Param(r.Context(), "filepath")
 		fs.ServeHTTP(w, r)
 	}
+}
+
+// AuthStore 线程不安全，初始化后不允许修改
+type AuthStore struct {
+	base64AuthList map[string]bool
+	open bool
+}
+// NewAuthStore authList: user:pwd列表，逗号分割，要求密码无逗号
+func NewAuthStore(authList string) *AuthStore {
+	arr := strings.Split(strings.TrimSpace(authList),",")
+	as := &AuthStore{}
+	as.base64AuthList = make(map[string]bool, 8)
+	for _,v := range arr {
+		origin := strings.TrimSpace(v)
+		if origin != "" {
+			as.open = true
+			as.base64AuthList[base64.StdEncoding.EncodeToString([]byte(origin))] = true
+		}
+	}
+	if as.open {
+		fmt.Println("AUTH MESSAGE: ", "当前服务已开启Basic Auth")
+	}
+	return as
+}
+func (as *AuthStore) BasicAuthWarp(f http.HandlerFunc)http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !as.CheckBasicAuthHttp(w, r) {
+			return
+		}
+		f(w,r)
+	}
+}
+// CheckBasicAuthHttp 校验并且写入response
+func (as *AuthStore) CheckBasicAuthHttp(w http.ResponseWriter, r *http.Request) bool {
+	if as.open {
+		s := r.Header.Get("Authorization")
+		if !as.CheckBasicAuth(strings.TrimLeft(s, "Basic ")) {
+			w.Header().Add("WWW-Authenticate", "Basic realm=\"Log in with secret\"")
+			w.WriteHeader(401)
+			w.Write([]byte("请登录！"))
+			return false
+		}
+	}
+	return true
+}
+func (as *AuthStore) CheckBasicAuth(base64Auth string) bool {
+	_,ok := as.base64AuthList[base64Auth]
+	return ok
 }

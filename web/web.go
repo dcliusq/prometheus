@@ -248,8 +248,7 @@ type Options struct {
 	RemoteReadConcurrencyLimit int
 	RemoteReadBytesInFrame     int
 	RemoteWriteReceiver        bool
-	Secret 					   string
-	CmdbAddr                   string
+	BasicAuthOrigin 		   string
 
 	Gatherer   prometheus.Gatherer
 	Registerer prometheus.Registerer
@@ -262,7 +261,7 @@ func New(logger log.Logger, o *Options) *Handler {
 	}
 
 	m := newMetrics(o.Registerer)
-	router := route.New(o.Secret, o.CmdbAddr).
+	router := route.New(o.BasicAuthOrigin).
 		WithInstrumentation(m.instrumentHandler).
 		WithInstrumentation(setPathWithPrefix(""))
 
@@ -576,7 +575,7 @@ func (h *Handler) Run(ctx context.Context, listener net.Listener, webConfig stri
 		apiPath = h.options.RoutePrefix + apiPath
 		level.Info(h.logger).Log("msg", "Router prefix", "prefix", h.options.RoutePrefix)
 	}
-	av1 := route.New(h.options.Secret, h.options.CmdbAddr).
+	av1 := route.New(h.options.BasicAuthOrigin).
 		WithInstrumentation(h.metrics.instrumentHandlerWithPrefix("/api/v1")).
 		WithInstrumentation(setPathWithPrefix(apiPath + "/v1"))
 	h.apiV1.Register(av1)
